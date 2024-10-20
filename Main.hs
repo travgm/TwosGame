@@ -260,18 +260,22 @@ yieldSlowly     = traverse_ $ \x ->
 -- Run game using terminal sources
 ------------------------------------------------------------------------
 
-vimBindings    :: Process Char Command
-vimBindings     = repeatedly process1
-  where
-  process1      = do c <- await
-                     case c of
-                       'j' -> yield (Move D)
-                       'k' -> yield (Move U)
-                       'h' -> yield (Move L)
-                       'l' -> yield (Move R)
-                       'q' -> stop
-                       '`' -> yield Undo
-                       _   -> return () -- ignore
+arrowBindings :: Process Char Command
+arrowBindings = repeatedly $ do
+  c <- await
+  case c of
+    '\ESC' -> do
+      _ <- await -- disregard [
+      arrow <- await -- Check which arrow key was pressed
+      case arrow of
+        'A' -> yield (Move U)
+        'B' -> yield (Move D)
+        'C' -> yield (Move R)
+        'D' -> yield (Move L)
+        _ -> return ()
+    'q' -> stop
+    'u' -> yield Undo
+    _ -> return ()
 
 boardPrinter  :: Terminal -> Game -> IO ()
 boardPrinter term = print1
@@ -299,8 +303,8 @@ boardPrinter term = print1
   deltaText 0   = ""
   deltaText d   = " (+" <> show d <> ")"
 
-  usageText     = termText "(h) left (l) right" <> nl
-               <> termText "(j) down (k) up"    <> nl
+  usageText     = termText "(←) left (→) right" <> nl
+               <> termText "(↓) down (↑) up"    <> nl
                <> termText "(`) undo (q) quit"  <> nl
 
   -- Row drawing
@@ -345,6 +349,6 @@ main            = do hSetBuffering stdin NoBuffering
                      g    <- newGame startingTiles
 
                      runT_ $ repeatedly (yield =<< liftIO getChar)
-                          ~> vimBindings
+                          ~> arrowBindings
                           ~> gameLogic g
                           ~> autoM (boardPrinter term)
